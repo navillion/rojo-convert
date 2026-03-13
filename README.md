@@ -6,7 +6,7 @@ That split is intentional: Roblox plugins can use `HttpService` to talk to softw
 
 ## What it exports
 
-- Folders and general instances as directories.
+- Folders and most instances as directories.
 - `ModuleScript`, `LocalScript`, and `Script` as `init.lua`, `init.client.lua`, and `init.server.lua`.
 - Modified instance properties, attributes, and tags into `init.meta.json`.
 - A Rojo project file that mounts the exported selection back to the original Studio ancestry, such as `ReplicatedStorage.Tools`.
@@ -26,37 +26,35 @@ exports/
       init.meta.json
   Tools.project.json
 ```
+## Basic Installation
+1. You can copy and paste the [RojoConvert.rbxmx](RojoConvert.rbxmx) file into your plugin directory (`C:\Users\<username>\AppData\Local\Roblox\Versions\<version>\Plugins` on Windows)
+2. Start the python export server in a terminal:
+  ```bash
+  python3 -m exporter.server --output ./exports
+  ```
+3. Select any object on ROBLOX Studio and click the `Rojo-convert` button in the `Plugins` toolbar to convert it!
+  - If you don't already have a Rojo project, the exporter will create a new `exports/` directory in the current working directory and place the converted files there.
 
-## Build and run
-
+## Building it yourself
 1. Build the plugin model:
 
    ```bash
    rojo build plugin.project.json -o RojoConvert.rbxmx
    ```
-
 2. Start the localhost export service:
 
    ```bash
    python3 -m exporter.server --output ./exports
    ```
-
 3. Install `RojoConvert.rbxmx` as a Studio plugin.
-
 4. In Studio, select one or more instances and click the `Rojo-convert` button in the `Plugins` toolbar.
-
 5. Check Studio's Output window for the export path and generated `.project.json` file.
 
-If the current working directory contains a Rojo project such as [default.project.json](/home/nav/rojo-convert/default.project.json), exports target the mapped `src/...` path automatically. If no matching `$path` exists for the selected Studio ancestry, the exporter falls back to `./exports`.
+If the current working directory contains a Rojo project, exports target the mapped `src/...` path automatically. If no matching `$path` exists for the selected Studio ancestry, the exporter falls back to `./exports`.
 
-## Repo layout
-
-- [plugin.project.json](/home/nav/rojo-convert/plugin.project.json) builds the plugin model with Rojo.
-- [plugin/src/init.server.lua](/home/nav/rojo-convert/plugin/src/init.server.lua) creates the toolbar button and sends export requests.
-- [plugin/src/ExportSerializer.lua](/home/nav/rojo-convert/plugin/src/ExportSerializer.lua) walks the selected instances and converts supported properties into Rojo JSON values.
-- [exporter/server.py](/home/nav/rojo-convert/exporter/server.py) runs the localhost HTTP service.
-- [exporter/writer.py](/home/nav/rojo-convert/exporter/writer.py) writes the Rojo tree and project file.
-- [tests/test_writer.py](/home/nav/rojo-convert/tests/test_writer.py) covers the file layout logic.
+## Tips
+- Place the rojo-exporter service in the root of your Rojo project, so it can write directly to the mapped `$path` instead of `exports/`
+     - You don't need to keep the plugin source files; they're just for building it yourself.
 
 ## Limitations
 
@@ -65,9 +63,9 @@ If the current working directory contains a Rojo project such as [default.projec
 - If a Roblox instance name is invalid on the local filesystem, the exporter sanitizes the directory name and preserves the original `Name` through `init.meta.json`.
 - Project-aware placement merges into existing directories and overwrites the exported files it owns, but it does not delete unrelated stale siblings automatically.
 
-## References
+## Resources
 
-- Rojo sync details: <https://rojo.space/docs/v7/sync-details/>
-- Rojo project format: <https://rojo.space/docs/v7/project-format/>
-- Rojo property encoding: <https://rojo.space/docs/v7/properties/>
-- Roblox `HttpService` docs, including plugin localhost usage: <https://create.roblox.com/docs/cloud-services/http-service>
+- Rojo sync details: [https://rojo.space/docs/v7/sync-details/](https://rojo.space/docs/v7/sync-details/)
+- Rojo project format: [https://rojo.space/docs/v7/project-format/](https://rojo.space/docs/v7/project-format/)
+- Rojo property encoding: [https://rojo.space/docs/v7/properties/](https://rojo.space/docs/v7/properties/)
+- Roblox `HttpService` docs, including plugin localhost usage: [https://create.roblox.com/docs/cloud-services/http-service](https://create.roblox.com/docs/cloud-services/http-service)
