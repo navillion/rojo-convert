@@ -303,6 +303,35 @@ local ALWAYS_INCLUDE_PROPERTIES = {
 		Size = true,
 		TextureID = true,
 	},
+	TextLabel = {
+		Font = true,
+		FontFace = true,
+		Text = true,
+		TextColor3 = true,
+		TextStrokeColor3 = true,
+		TextStrokeTransparency = true,
+		TextTransparency = true,
+	},
+	TextButton = {
+		Font = true,
+		FontFace = true,
+		Text = true,
+		TextColor3 = true,
+		TextStrokeColor3 = true,
+		TextStrokeTransparency = true,
+		TextTransparency = true,
+	},
+	TextBox = {
+		Font = true,
+		FontFace = true,
+		PlaceholderColor3 = true,
+		PlaceholderText = true,
+		Text = true,
+		TextColor3 = true,
+		TextStrokeColor3 = true,
+		TextStrokeTransparency = true,
+		TextTransparency = true,
+	},
 }
 
 local OMITTED_PROPERTIES = {
@@ -320,54 +349,83 @@ local OMITTED_PROPERTIES = {
 	UniqueId = true,
 }
 
-local FALLBACK_PROPERTIES = {
-	Script = { "Disabled", "RunContext" },
-	LocalScript = { "Disabled" },
-	ModuleScript = {},
-	Folder = {},
-	Model = { "LevelOfDetail", "ModelStreamingMode", "PrimaryPart", "WorldPivot" },
-	Tool = {
-		"CanBeDropped",
-		"Enabled",
-		"Grip",
-		"GripForward",
-		"GripPos",
-		"GripRight",
-		"GripUp",
-		"ManualActivationOnly",
-		"RequiresHandle",
-		"TextureId",
-		"ToolTip",
+local TEXT_PROPERTIES = {
+	"Font",
+	"FontFace",
+	"LineHeight",
+	"MaxVisibleGraphemes",
+	"OpenTypeFeatures",
+	"RichText",
+	"Text",
+	"TextColor3",
+	"TextDirection",
+	"TextScaled",
+	"TextSize",
+	"TextStrokeColor3",
+	"TextStrokeTransparency",
+	"TextTransparency",
+	"TextTruncate",
+	"TextWrapped",
+	"TextXAlignment",
+	"TextYAlignment",
+}
+
+local FALLBACK_PROPERTY_GROUPS = {
+	{ className = "Script", properties = { "Disabled", "RunContext" } },
+	{ className = "LocalScript", properties = { "Disabled" } },
+	{ className = "ModuleScript", properties = {} },
+	{ className = "Folder", properties = {} },
+	{ className = "Model", properties = { "LevelOfDetail", "ModelStreamingMode", "PrimaryPart", "WorldPivot" } },
+	{
+		className = "Tool",
+		properties = {
+			"CanBeDropped",
+			"Enabled",
+			"Grip",
+			"GripForward",
+			"GripPos",
+			"GripRight",
+			"GripUp",
+			"ManualActivationOnly",
+			"RequiresHandle",
+			"TextureId",
+			"ToolTip",
+		},
 	},
-	Configuration = {},
-	RemoteEvent = {},
-	RemoteFunction = {},
-	BindableEvent = {},
-	BindableFunction = {},
-	BoolValue = { "Value" },
-	IntValue = { "Value" },
-	NumberValue = { "Value" },
-	StringValue = { "Value" },
-	ObjectValue = { "Value" },
-	Vector3Value = { "Value" },
-	CFrameValue = { "Value" },
-	Color3Value = { "Value" },
-	BrickColorValue = { "Value" },
-	RayValue = { "Value" },
-	Part = {
-		"Anchored",
-		"CanCollide",
-		"CanQuery",
-		"CanTouch",
-		"CastShadow",
-		"Color",
-		"Material",
-		"Reflectance",
-		"Shape",
-		"Size",
-		"Transparency",
+	{ className = "Configuration", properties = {} },
+	{ className = "RemoteEvent", properties = {} },
+	{ className = "RemoteFunction", properties = {} },
+	{ className = "BindableEvent", properties = {} },
+	{ className = "BindableFunction", properties = {} },
+	{ className = "BoolValue", properties = { "Value" } },
+	{ className = "IntValue", properties = { "Value" } },
+	{ className = "NumberValue", properties = { "Value" } },
+	{ className = "StringValue", properties = { "Value" } },
+	{ className = "ObjectValue", properties = { "Value" } },
+	{ className = "Vector3Value", properties = { "Value" } },
+	{ className = "CFrameValue", properties = { "Value" } },
+	{ className = "Color3Value", properties = { "Value" } },
+	{ className = "BrickColorValue", properties = { "Value" } },
+	{ className = "RayValue", properties = { "Value" } },
+	{
+		className = "Part",
+		properties = {
+			"Anchored",
+			"CanCollide",
+			"CanQuery",
+			"CanTouch",
+			"CastShadow",
+			"Color",
+			"Material",
+			"Reflectance",
+			"Shape",
+			"Size",
+			"Transparency",
+		},
 	},
-		MeshPart = {
+	{
+		className = "MeshPart",
+		properties = {
 			"Anchored",
 			"CanCollide",
 			"CanQuery",
@@ -383,6 +441,238 @@ local FALLBACK_PROPERTIES = {
 			"Size",
 			"TextureID",
 			"Transparency",
+		},
+	},
+	{
+		className = "GuiObject",
+		properties = {
+			"Active",
+			"AnchorPoint",
+			"AutomaticSize",
+			"BackgroundColor3",
+			"BackgroundTransparency",
+			"BorderColor3",
+			"BorderMode",
+			"BorderSizePixel",
+			"ClipsDescendants",
+			"LayoutOrder",
+			"Position",
+			"Rotation",
+			"Selectable",
+			"SelectionOrder",
+			"Size",
+			"SizeConstraint",
+			"Visible",
+			"ZIndex",
+		},
+	},
+	{
+		className = "GuiButton",
+		properties = {
+			"AutoButtonColor",
+			"Modal",
+			"Selected",
+			"Style",
+		},
+	},
+	{
+		className = "TextLabel",
+		properties = TEXT_PROPERTIES,
+	},
+	{
+		className = "TextButton",
+		properties = TEXT_PROPERTIES,
+	},
+	{
+		className = "TextBox",
+		properties = {
+			"Font",
+			"FontFace",
+			"ClearTextOnFocus",
+			"LineHeight",
+			"MaxVisibleGraphemes",
+			"MultiLine",
+			"OpenTypeFeatures",
+			"PlaceholderColor3",
+			"PlaceholderText",
+			"RichText",
+			"ShowNativeInput",
+			"Text",
+			"TextColor3",
+			"TextDirection",
+			"TextEditable",
+			"TextScaled",
+			"TextSize",
+			"TextStrokeColor3",
+			"TextStrokeTransparency",
+			"TextTransparency",
+			"TextTruncate",
+			"TextWrapped",
+			"TextXAlignment",
+			"TextYAlignment",
+		},
+	},
+	{
+		className = "ImageLabel",
+		properties = {
+			"Image",
+			"ImageColor3",
+			"ImageRectOffset",
+			"ImageRectSize",
+			"ImageTransparency",
+			"ResampleMode",
+			"ScaleType",
+			"SliceCenter",
+			"SliceScale",
+			"TileSize",
+		},
+	},
+	{
+		className = "ImageButton",
+		properties = {
+			"HoverImage",
+			"PressedImage",
+		},
+	},
+	{
+		className = "LayerCollector",
+		properties = {
+			"Enabled",
+			"ResetOnSpawn",
+			"ZIndexBehavior",
+		},
+	},
+	{
+		className = "ScreenGui",
+		properties = {
+			"ClipToDeviceSafeArea",
+			"DisplayOrder",
+			"IgnoreGuiInset",
+			"SafeAreaCompatibility",
+			"ScreenInsets",
+		},
+	},
+	{
+		className = "ScrollingFrame",
+		properties = {
+			"AutomaticCanvasSize",
+			"BottomImage",
+			"CanvasPosition",
+			"CanvasSize",
+			"ElasticBehavior",
+			"HorizontalScrollBarInset",
+			"MidImage",
+			"ScrollBarImageColor3",
+			"ScrollBarImageTransparency",
+			"ScrollBarThickness",
+			"ScrollingDirection",
+			"ScrollingEnabled",
+			"TopImage",
+			"VerticalScrollBarInset",
+			"VerticalScrollBarPosition",
+		},
+	},
+	{
+		className = "UIAspectRatioConstraint",
+		properties = {
+			"AspectRatio",
+			"AspectType",
+			"DominantAxis",
+		},
+	},
+	{
+		className = "UICorner",
+		properties = {
+			"CornerRadius",
+		},
+	},
+	{
+		className = "UIGradient",
+		properties = {
+			"Color",
+			"Enabled",
+			"Offset",
+			"Rotation",
+			"Transparency",
+		},
+	},
+	{
+		className = "UIGridLayout",
+		properties = {
+			"CellPadding",
+			"CellSize",
+			"FillDirection",
+			"FillDirectionMaxCells",
+			"HorizontalAlignment",
+			"SortOrder",
+			"StartCorner",
+			"VerticalAlignment",
+		},
+	},
+	{
+		className = "UIListLayout",
+		properties = {
+			"FillDirection",
+			"HorizontalAlignment",
+			"Padding",
+			"SortOrder",
+			"VerticalAlignment",
+			"Wraps",
+		},
+	},
+	{
+		className = "UIPadding",
+		properties = {
+			"PaddingBottom",
+			"PaddingLeft",
+			"PaddingRight",
+			"PaddingTop",
+		},
+	},
+	{
+		className = "UIPageLayout",
+		properties = {
+			"Animated",
+			"EasingDirection",
+			"EasingStyle",
+			"FillDirection",
+			"GamepadInputEnabled",
+			"Padding",
+			"ScrollWheelInputEnabled",
+			"TouchInputEnabled",
+			"TweenTime",
+		},
+	},
+	{
+		className = "UIScale",
+		properties = {
+			"Scale",
+		},
+	},
+	{
+		className = "UISizeConstraint",
+		properties = {
+			"MaxSize",
+			"MinSize",
+		},
+	},
+	{
+		className = "UIStroke",
+		properties = {
+			"ApplyStrokeMode",
+			"Color",
+			"Enabled",
+			"LineJoinMode",
+			"Thickness",
+			"Transparency",
+		},
+	},
+	{
+		className = "UITextSizeConstraint",
+		properties = {
+			"MaxTextSize",
+			"MinTextSize",
+		},
 	},
 }
 
@@ -435,12 +725,35 @@ local function extractValueType(descriptor)
 	return valueType.Name or valueType.name or valueType.Category or valueType.category
 end
 
-local function getPropertyDescriptors(className)
+local function instanceIsA(instance, className)
+	local ok, result = pcall(function()
+		return instance:IsA(className)
+	end)
+
+	return ok and result
+end
+
+local function getPropertyDescriptors(instance)
+	local className = instance.ClassName
+
 	if PROPERTY_CACHE[className] ~= nil then
 		return PROPERTY_CACHE[className]
 	end
 
 	local descriptors = {}
+	local seenNames = {}
+
+	local function addDescriptor(name, valueType)
+		if name == nil or OMITTED_PROPERTIES[name] or seenNames[name] then
+			return
+		end
+
+		seenNames[name] = true
+		table.insert(descriptors, {
+			name = name,
+			valueType = valueType,
+		})
+	end
 
 	if reflectionService ~= nil then
 		local ok, result = pcall(function()
@@ -456,25 +769,16 @@ local function getPropertyDescriptors(className)
 		if ok and type(result) == "table" then
 			for key, descriptor in pairs(result) do
 				local name = extractPropertyName(descriptor, key)
-
-				if name ~= nil and not OMITTED_PROPERTIES[name] then
-					table.insert(descriptors, {
-						name = name,
-						valueType = extractValueType(descriptor),
-					})
-				end
+				addDescriptor(name, extractValueType(descriptor))
 			end
 		end
 	end
 
-	if #descriptors == 0 then
-		local fallbackNames = FALLBACK_PROPERTIES[className] or {}
-
-		for _, name in ipairs(fallbackNames) do
-			table.insert(descriptors, {
-				name = name,
-				valueType = nil,
-			})
+	for _, group in ipairs(FALLBACK_PROPERTY_GROUPS) do
+		if instanceIsA(instance, group.className) then
+			for _, name in ipairs(group.properties) do
+				addDescriptor(name, nil)
+			end
 		end
 	end
 
@@ -986,7 +1290,7 @@ local function collectProperties(instance, warnings)
 	local seen = {}
 	local forceExportProperties = ALWAYS_INCLUDE_PROPERTIES[instance.ClassName]
 
-	for _, descriptor in ipairs(getPropertyDescriptors(instance.ClassName)) do
+	for _, descriptor in ipairs(getPropertyDescriptors(instance)) do
 		local propertyName = descriptor.name
 
 		if propertyName ~= nil and not seen[propertyName] then
