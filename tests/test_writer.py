@@ -9,6 +9,54 @@ from exporter.writer import ExportWriter
 
 
 class ExportWriterTests(unittest.TestCase):
+    def test_existing_project_mapping_marks_partial_ancestors_ignore_unknown(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_directory:
+            root = Path(temp_directory)
+            (root / "default.project.json").write_text(
+                json.dumps(
+                    {
+                        "name": "test-project",
+                        "tree": {
+                            "$className": "DataModel",
+                            "ReplicatedStorage": {
+                                "Shared": {
+                                    "$path": "src/shared",
+                                }
+                            },
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            writer = ExportWriter(root / "exports", project_root=root)
+            payload = {
+                "selection": [
+                    {
+                        "name": "Hammer",
+                        "className": "Tool",
+                        "mountPath": [
+                            {"name": "ReplicatedStorage", "className": "ReplicatedStorage"},
+                            {"name": "Shared", "className": "Folder"},
+                            {"name": "Tools", "className": "Folder"},
+                        ],
+                        "children": [],
+                    }
+                ]
+            }
+
+            result = writer.export(payload)
+
+            hammer_directory = root / "src" / "shared" / "Tools" / "Hammer"
+            shared_meta = json.loads((root / "src" / "shared" / "init.meta.json").read_text(encoding="utf-8"))
+            tools_meta = json.loads((root / "src" / "shared" / "Tools" / "init.meta.json").read_text(encoding="utf-8"))
+            hammer_meta = json.loads((hammer_directory / "init.meta.json").read_text(encoding="utf-8"))
+
+            self.assertEqual(Path(result["bundlePath"]), hammer_directory)
+            self.assertTrue(shared_meta["ignoreUnknownInstances"])
+            self.assertTrue(tools_meta["ignoreUnknownInstances"])
+            self.assertNotIn("ignoreUnknownInstances", hammer_meta)
+
     def test_existing_project_mapping_places_export_inside_src_tree(self) -> None:
         with tempfile.TemporaryDirectory() as temp_directory:
             root = Path(temp_directory)
@@ -162,6 +210,35 @@ class ExportWriterTests(unittest.TestCase):
 
             project_payload = json.loads(project_file.read_text(encoding="utf-8"))
             self.assertEqual(project_payload["tree"]["ReplicatedStorage"]["Tools"]["$path"], "Tools")
+            self.assertTrue(project_payload["tree"]["ReplicatedStorage"]["$ignoreUnknownInstances"])
+
+    def test_single_child_export_marks_project_ancestors_ignore_unknown(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_directory:
+            writer = ExportWriter(Path(temp_directory), project_root=Path(temp_directory))
+            payload = {
+                "selection": [
+                    {
+                        "name": "Hammer",
+                        "className": "Tool",
+                        "mountPath": [
+                            {"name": "ReplicatedStorage", "className": "ReplicatedStorage"},
+                            {"name": "Tools", "className": "Folder"},
+                        ],
+                        "children": [],
+                    }
+                ]
+            }
+
+            result = writer.export(payload)
+            project_file = Path(result["projectFile"])
+            project_payload = json.loads(project_file.read_text(encoding="utf-8"))
+
+            replicated_storage = project_payload["tree"]["ReplicatedStorage"]
+            tools = replicated_storage["Tools"]
+
+            self.assertTrue(replicated_storage["$ignoreUnknownInstances"])
+            self.assertTrue(tools["$ignoreUnknownInstances"])
+            self.assertEqual(tools["Hammer"]["$path"], "Hammer")
 
     def test_sanitized_child_names_preserve_original_instance_name(self) -> None:
         with tempfile.TemporaryDirectory() as temp_directory:

@@ -209,6 +209,7 @@ class ExportWriter:
                     cursor[ancestor_name] = {"$className": ancestor_class}
 
                 cursor = cursor[ancestor_name]
+                cursor["$ignoreUnknownInstances"] = True
 
             root_name = node["name"]
             if root_name in cursor:
@@ -304,7 +305,37 @@ class ExportWriter:
             preserve_original_name=placement.preserve_original_name,
             merge_existing=True,
         )
+
+        self._ensure_ignore_unknown_meta_files(placement)
+
         return placement.target_directory
+
+    def _ensure_ignore_unknown_meta_files(self, placement: ProjectPlacement) -> None:
+        if placement.target_directory == placement.mapping_root:
+            return
+
+        directories = [placement.mapping_root]
+        current_directory = placement.mapping_root
+
+        for ancestor in placement.ancestor_entries:
+            current_directory = current_directory / self._sanitize_component(ancestor["name"])
+            directories.append(current_directory)
+
+        for directory in directories:
+            self._ensure_ignore_unknown_meta(directory)
+
+    def _ensure_ignore_unknown_meta(self, directory: Path) -> None:
+        if not directory.exists() or not directory.is_dir():
+            raise ExportError(f"Expected {directory} to exist before updating init.meta.json.")
+
+        meta_path = directory / "init.meta.json"
+        meta = self._read_json_object(meta_path) or {}
+
+        if meta.get("ignoreUnknownInstances") is True:
+            return
+
+        meta["ignoreUnknownInstances"] = True
+        self._write_json(meta_path, meta)
 
     def _ensure_intermediate_ancestors(
         self,
@@ -578,5 +609,19 @@ class ExportWriter:
             if isinstance(child, dict):
                 self._collect_project_mappings(child, studio_path + (key,), project_directory, mappings)
 
+    @staticmethod
+    def _read_json_object(path: Path) -> dict[str, Any] | None:
+        if not path.is_file():
+            return None
+
+        try:
+            decoded = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise ExportError(f"JSON file {path} is not valid: {exc}") from exc
+
+        if not isinstance(decoded, dict):
+            raise ExportError(f"JSON file {path} must contain an object.")
+
+        return decoded
 
 __all__ = ["ExportError", "ExportWriter"]
