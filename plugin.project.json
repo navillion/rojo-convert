@@ -1,0 +1,8 @@
+{
+  "name": "RojoConvert",
+  "emitLegacyScripts": true,
+  "tree": {
+    "$path": "plugin/src"
+  }
+}
+
