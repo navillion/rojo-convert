@@ -1,0 +1,70 @@
+{
+  "name": "rojo-convert",
+  "tree": {
+    "$className": "DataModel",
+    "Workspace": {
+      "$path": "src/Workspace",
+      "$ignoreUnknownInstances": true
+    },
+    "Players": {
+      "$path": "src/Players",
+      "$ignoreUnknownInstances": true
+    },
+    "Lighting": {
+      "$path": "src/Lighting",
+      "$ignoreUnknownInstances": true
+    },
+    "MaterialService": {
+      "$path": "src/MaterialService",
+      "$ignoreUnknownInstances": true
+    },
+    "ReplicatedFirst": {
+      "$path": "src/ReplicatedFirst",
+      "$ignoreUnknownInstances": true
+    },
+    "ReplicatedStorage": {
+      "$path": "src/ReplicatedStorage",
+      "$ignoreUnknownInstances": true
+    },
+    "ServerScriptService": {
+      "$path": "src/ServerScriptService",
+      "$ignoreUnknownInstances": true
+    },
+    "ServerStorage": {
+      "$path": "src/ServerStorage",
+      "$ignoreUnknownInstances": true
+    },
+    "StarterGui": {
+      "$path": "src/StarterGui",
+      "$ignoreUnknownInstances": true
+    },
+    "StarterPack": {
+      "$path": "src/StarterPack",
+      "$ignoreUnknownInstances": true
+    },
+    "StarterPlayer": {
+      "$path": "src/StarterPlayer",
+      "$ignoreUnknownInstances": true,
+      "StarterCharacterScripts": {
+        "$path": "src/StarterPlayer/StarterCharacterScripts",
+        "$ignoreUnknownInstances": true
+      },
+      "StarterPlayerScripts": {
+        "$path": "src/StarterPlayer/StarterPlayerScripts",
+        "$ignoreUnknownInstances": true
+      }
+    },
+    "Teams": {
+      "$path": "src/Teams",
+      "$ignoreUnknownInstances": true
+    },
+    "SoundService": {
+      "$path": "src/SoundService",
+      "$ignoreUnknownInstances": true
+    },
+    "TextChatService": {
+      "$path": "src/TextChatService",
+      "$ignoreUnknownInstances": true
+    }
+  }
+}
