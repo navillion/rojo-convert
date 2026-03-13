@@ -55,6 +55,7 @@ If the current working directory contains a Rojo project, exports target the map
 ## Tips
 - Place the rojo-exporter service in the root of your Rojo project, so it can write directly to the mapped `$path` instead of `exports/`
      - You don't need to keep the plugin source files; they're just for building it yourself.
+- Don't `rojo serve` while converting directly into a project. It can crash your Rojo.
 
 ## Limitations
 
