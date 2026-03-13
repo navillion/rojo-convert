@@ -8,6 +8,22 @@ local SCRIPT_FILE_CLASSES = {
 	ModuleScript = true,
 }
 
+local MESH_PART_ATTRIBUTE = "RojoMeshId"
+local MESH_PART_COLLISION_ATTRIBUTE = "RojoCollisionFidelity"
+local MESH_PART_RENDER_ATTRIBUTE = "RojoRenderFidelity"
+local MESH_PART_SIZE_ATTRIBUTE = "RojoMeshSize"
+local MESH_PART_TAG = "RojoMeshPart"
+
+local ALWAYS_INCLUDE_PROPERTIES = {
+	MeshPart = {
+		CollisionFidelity = true,
+		MeshId = true,
+		RenderFidelity = true,
+		Size = true,
+		TextureID = true,
+	},
+}
+
 local OMITTED_PROPERTIES = {
 	Attributes = true,
 	AttributesReplicate = true,
@@ -70,20 +86,22 @@ local FALLBACK_PROPERTIES = {
 		"Size",
 		"Transparency",
 	},
-	MeshPart = {
-		"Anchored",
-		"CanCollide",
-		"CanQuery",
-		"CanTouch",
-		"CastShadow",
-		"Color",
-		"DoubleSided",
-		"Material",
-		"MeshId",
-		"Reflectance",
-		"Size",
-		"TextureID",
-		"Transparency",
+		MeshPart = {
+			"Anchored",
+			"CanCollide",
+			"CanQuery",
+			"CanTouch",
+			"CollisionFidelity",
+			"CastShadow",
+			"Color",
+			"DoubleSided",
+			"Material",
+			"MeshId",
+			"RenderFidelity",
+			"Reflectance",
+			"Size",
+			"TextureID",
+			"Transparency",
 	},
 }
 
@@ -624,9 +642,68 @@ local function encodeAttributes(instance, warnings)
 	return encodedAttributes
 end
 
+local function augmentSpecialCaseProperties(instance, properties, warnings)
+	if not instance:IsA("MeshPart") then
+		return properties
+	end
+
+	local result = properties or {}
+	local encodedAttributes = result.Attributes
+
+	if type(encodedAttributes) ~= "table" then
+		encodedAttributes = {}
+	end
+
+	local meshId = instance:GetAttribute(MESH_PART_ATTRIBUTE)
+	if type(meshId) ~= "string" or meshId == "" then
+		meshId = instance.MeshId
+	end
+
+	if type(meshId) == "string" and meshId ~= "" then
+		encodedAttributes[MESH_PART_ATTRIBUTE] = {
+			String = meshId,
+		}
+	end
+
+	encodedAttributes[MESH_PART_COLLISION_ATTRIBUTE] = {
+		String = instance.CollisionFidelity.Name,
+	}
+	encodedAttributes[MESH_PART_RENDER_ATTRIBUTE] = {
+		String = instance.RenderFidelity.Name,
+	}
+
+	local encodedSize, sizeError = encodeAttributeValue(instance.Size)
+	if encodedSize ~= nil then
+		encodedAttributes[MESH_PART_SIZE_ATTRIBUTE] = encodedSize
+	elseif sizeError ~= nil then
+		table.insert(warnings, makeWarning(instance:GetFullName(), MESH_PART_SIZE_ATTRIBUTE, sizeError))
+	end
+
+	if next(encodedAttributes) ~= nil then
+		result.Attributes = encodedAttributes
+	end
+
+	local tags = {}
+	if type(result.Tags) == "table" then
+		for _, tag in ipairs(result.Tags) do
+			table.insert(tags, tag)
+		end
+	end
+
+	if not table.find(tags, MESH_PART_TAG) then
+		table.insert(tags, MESH_PART_TAG)
+	end
+
+	table.sort(tags)
+	result.Tags = tags
+
+	return result
+end
+
 local function collectProperties(instance, warnings)
 	local properties = {}
 	local seen = {}
+	local forceExportProperties = ALWAYS_INCLUDE_PROPERTIES[instance.ClassName]
 
 	for _, descriptor in ipairs(getPropertyDescriptors(instance.ClassName)) do
 		local propertyName = descriptor.name
@@ -634,11 +711,17 @@ local function collectProperties(instance, warnings)
 		if propertyName ~= nil and not seen[propertyName] then
 			seen[propertyName] = true
 
-			local modifiedOk, isModified = pcall(function()
-				return instance:IsPropertyModified(propertyName)
-			end)
+			local shouldExport = forceExportProperties ~= nil and forceExportProperties[propertyName] == true
 
-			if modifiedOk and isModified then
+			if not shouldExport then
+				local modifiedOk, isModified = pcall(function()
+					return instance:IsPropertyModified(propertyName)
+				end)
+
+				shouldExport = modifiedOk and isModified
+			end
+
+			if shouldExport then
 				local valueOk, propertyValue = pcall(function()
 					return instance[propertyName]
 				end)
@@ -667,6 +750,8 @@ local function collectProperties(instance, warnings)
 		table.sort(tags)
 		properties.Tags = tags
 	end
+
+	properties = augmentSpecialCaseProperties(instance, properties, warnings)
 
 	if next(properties) == nil then
 		return nil
@@ -791,4 +876,3 @@ function ExportSerializer.serializeSelection(selection)
 end
 
 return ExportSerializer
-

@@ -85,7 +85,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     server = ExportServer((args.host, args.port), ExportRequestHandler)
-    server.exporter = ExportWriter(args.output)
+    server.exporter = ExportWriter(args.output, project_root=Path.cwd())
 
     print(f"Rojo-convert exporter listening on http://{args.host}:{args.port}")
     print(f"Writing exports to {server.exporter.output_root}")
@@ -100,4 +100,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

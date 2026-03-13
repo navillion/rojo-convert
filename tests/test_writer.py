@@ -9,9 +9,102 @@ from exporter.writer import ExportWriter
 
 
 class ExportWriterTests(unittest.TestCase):
+    def test_existing_project_mapping_places_export_inside_src_tree(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_directory:
+            root = Path(temp_directory)
+            (root / "default.project.json").write_text(
+                json.dumps(
+                    {
+                        "name": "test-project",
+                        "tree": {
+                            "$className": "DataModel",
+                            "ReplicatedStorage": {
+                                "Shared": {
+                                    "$path": "src/shared",
+                                }
+                            },
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            writer = ExportWriter(root / "exports", project_root=root)
+            payload = {
+                "selection": [
+                    {
+                        "name": "Tools",
+                        "className": "Folder",
+                        "mountPath": [
+                            {"name": "ReplicatedStorage", "className": "ReplicatedStorage"},
+                            {"name": "Shared", "className": "Folder"},
+                        ],
+                        "children": [
+                            {
+                                "name": "Hammer",
+                                "className": "Tool",
+                                "mountPath": [],
+                                "children": [],
+                            }
+                        ],
+                    }
+                ]
+            }
+
+            result = writer.export(payload)
+
+            mapped_directory = root / "src" / "shared" / "Tools"
+            self.assertEqual(Path(result["bundlePath"]), mapped_directory)
+            self.assertEqual(result["projectFile"], str(root / "default.project.json"))
+            self.assertTrue((mapped_directory / "Hammer" / "init.meta.json").is_file())
+            self.assertFalse((root / "exports" / "Tools").exists())
+
+    def test_missing_project_mapping_falls_back_to_exports(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_directory:
+            root = Path(temp_directory)
+            (root / "default.project.json").write_text(
+                json.dumps(
+                    {
+                        "name": "test-project",
+                        "tree": {
+                            "$className": "DataModel",
+                            "ReplicatedStorage": {
+                                "Shared": {
+                                    "$path": "src/shared",
+                                }
+                            },
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            writer = ExportWriter(root / "exports", project_root=root)
+            payload = {
+                "selection": [
+                    {
+                        "name": "Cache",
+                        "className": "Folder",
+                        "mountPath": [
+                            {"name": "ServerStorage", "className": "ServerStorage"},
+                        ],
+                        "children": [],
+                    }
+                ]
+            }
+
+            result = writer.export(payload)
+
+            fallback_directory = root / "exports" / "Cache"
+            fallback_project = root / "exports" / "Cache.project.json"
+            self.assertEqual(Path(result["bundlePath"]), fallback_directory)
+            self.assertEqual(Path(result["projectFile"]), fallback_project)
+            self.assertTrue(fallback_directory.is_dir())
+            self.assertTrue(fallback_project.is_file())
+
     def test_single_selection_export_writes_rojo_tree_and_project_file(self) -> None:
         with tempfile.TemporaryDirectory() as temp_directory:
-            writer = ExportWriter(Path(temp_directory))
+            writer = ExportWriter(Path(temp_directory), project_root=Path(temp_directory))
             payload = {
                 "selection": [
                     {
@@ -72,7 +165,7 @@ class ExportWriterTests(unittest.TestCase):
 
     def test_sanitized_child_names_preserve_original_instance_name(self) -> None:
         with tempfile.TemporaryDirectory() as temp_directory:
-            writer = ExportWriter(Path(temp_directory))
+            writer = ExportWriter(Path(temp_directory), project_root=Path(temp_directory))
             payload = {
                 "selection": [
                     {
@@ -111,7 +204,7 @@ class ExportWriterTests(unittest.TestCase):
 
     def test_multiple_selection_export_creates_bundle_project(self) -> None:
         with tempfile.TemporaryDirectory() as temp_directory:
-            writer = ExportWriter(Path(temp_directory))
+            writer = ExportWriter(Path(temp_directory), project_root=Path(temp_directory))
             payload = {
                 "selection": [
                     {

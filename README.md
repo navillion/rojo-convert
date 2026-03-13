@@ -10,6 +10,8 @@ That split is intentional: Roblox plugins can use `HttpService` to talk to softw
 - `ModuleScript`, `LocalScript`, and `Script` as `init.lua`, `init.client.lua`, and `init.server.lua`.
 - Modified instance properties, attributes, and tags into `init.meta.json`.
 - A Rojo project file that mounts the exported selection back to the original Studio ancestry, such as `ReplicatedStorage.Tools`.
+- If the exporter is running from a folder that already contains `default.project.json`, selections are written directly into the nearest mapped Rojo `$path` instead of `exports/`.
+- MeshParts are exported with a `RojoMeshId` attribute and `RojoMeshPart` tag so the plugin can re-apply their mesh data when Rojo syncs them back into Studio.
 
 Example export for a selected `ReplicatedStorage.Tools` folder:
 
@@ -45,6 +47,8 @@ exports/
 
 5. Check Studio's Output window for the export path and generated `.project.json` file.
 
+If the current working directory contains a Rojo project such as [default.project.json](/home/nav/rojo-convert/default.project.json), exports target the mapped `src/...` path automatically. If no matching `$path` exists for the selected Studio ancestry, the exporter falls back to `./exports`.
+
 ## Repo layout
 
 - [plugin.project.json](/home/nav/rojo-convert/plugin.project.json) builds the plugin model with Rojo.
@@ -59,6 +63,7 @@ exports/
 - The exporter skips property types that Rojo does not support in project/meta files, such as instance references (`Ref`), `Region3`, `Region3int16`, `SharedString`, `MaterialColors`, and `OptionalCoordinateFrame`.
 - Exported properties are intentionally sparse: the plugin uses modified properties instead of dumping every default value.
 - If a Roblox instance name is invalid on the local filesystem, the exporter sanitizes the directory name and preserves the original `Name` through `init.meta.json`.
+- Project-aware placement merges into existing directories and overwrites the exported files it owns, but it does not delete unrelated stale siblings automatically.
 
 ## References
 
