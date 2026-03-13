@@ -42,15 +42,13 @@
       "$path": "src/StarterPack",
       "$ignoreUnknownInstances": true
     },
-    "StarterPlayer": {
-      "$path": "src/StarterPlayer",
-      "$ignoreUnknownInstances": true,
-      "StarterCharacterScripts": {
-        "$path": "src/StarterPlayer/StarterCharacterScripts",
+    "StarterPlayer" : {
+      "StarterPlayerScripts": {
+        "$path": "src/StarterPlayerScripts",
         "$ignoreUnknownInstances": true
       },
-      "StarterPlayerScripts": {
-        "$path": "src/StarterPlayer/StarterPlayerScripts",
+      "StarterCharacterScripts": {
+        "$path": "src/StarterCharacterScripts",
         "$ignoreUnknownInstances": true
       }
     },
