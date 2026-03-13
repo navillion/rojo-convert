@@ -687,6 +687,38 @@ local function isFiniteNumber(value)
 	return value == value and value ~= math.huge and value ~= -math.huge
 end
 
+local function hasOnlyFiniteNumbers(value)
+	local kind = typeof(value)
+
+	if kind == "number" then
+		return isFiniteNumber(value)
+	end
+
+	if kind ~= "table" then
+		return true
+	end
+
+	for _, nestedValue in pairs(value) do
+		if not hasOnlyFiniteNumbers(nestedValue) then
+			return false
+		end
+	end
+
+	return true
+end
+
+local function validateEncodedValue(encodedValue)
+	if encodedValue == nil then
+		return nil, "value was nil"
+	end
+
+	if not hasOnlyFiniteNumbers(encodedValue) then
+		return nil, "contains a non-finite number"
+	end
+
+	return encodedValue
+end
+
 local function makeWarning(path, propertyName, message)
 	return ("%s.%s skipped: %s"):format(path, propertyName, message)
 end
@@ -1214,7 +1246,13 @@ local function encodeAttributes(instance, warnings)
 		local encodedValue, encodeError = encodeAttributeValue(attributes[name])
 
 		if encodedValue ~= nil then
-			encodedAttributes[name] = encodedValue
+			local validatedValue, validateError = validateEncodedValue(encodedValue)
+
+			if validatedValue ~= nil then
+				encodedAttributes[name] = validatedValue
+			else
+				table.insert(warnings, makeWarning(instance:GetFullName(), ("Attributes[%s]"):format(name), validateError))
+			end
 		else
 			table.insert(warnings, makeWarning(instance:GetFullName(), ("Attributes[%s]"):format(name), encodeError))
 		end
@@ -1285,6 +1323,35 @@ local function augmentSpecialCaseProperties(instance, properties, warnings)
 	return result
 end
 
+local function normalizeLegacyProperties(properties)
+	if properties == nil then
+		return nil
+	end
+
+	local modernAliases = {
+		BackgroundColor = "BackgroundColor3",
+		BorderColor = "BorderColor3",
+		Font = "FontFace",
+		FontSize = "TextSize",
+		TextColor = "TextColor3",
+		TextWrap = "TextWrapped",
+	}
+
+	for legacyName, modernName in pairs(modernAliases) do
+		if properties[legacyName] ~= nil and properties[modernName] ~= nil then
+			properties[legacyName] = nil
+		end
+	end
+
+	if properties.Transparency ~= nil then
+		if properties.BackgroundTransparency ~= nil or properties.ImageTransparency ~= nil or properties.TextTransparency ~= nil then
+			properties.Transparency = nil
+		end
+	end
+
+	return properties
+end
+
 local function collectProperties(instance, warnings)
 	local properties = {}
 	local seen = {}
@@ -1315,7 +1382,13 @@ local function collectProperties(instance, warnings)
 					local encodedValue, encodeError = encodePropertyValue(propertyValue, descriptor.valueType)
 
 					if encodedValue ~= nil then
-						properties[propertyName] = encodedValue
+						local validatedValue, validateError = validateEncodedValue(encodedValue)
+
+						if validatedValue ~= nil then
+							properties[propertyName] = validatedValue
+						else
+							table.insert(warnings, makeWarning(instance:GetFullName(), propertyName, validateError))
+						end
 					else
 						table.insert(warnings, makeWarning(instance:GetFullName(), propertyName, encodeError))
 					end
@@ -1337,6 +1410,7 @@ local function collectProperties(instance, warnings)
 	end
 
 	properties = augmentSpecialCaseProperties(instance, properties, warnings)
+	properties = normalizeLegacyProperties(properties)
 
 	if next(properties) == nil then
 		return nil
