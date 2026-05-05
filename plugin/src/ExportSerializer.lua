@@ -13,6 +13,14 @@ local MESH_PART_COLLISION_ATTRIBUTE = "RojoCollisionFidelity"
 local MESH_PART_RENDER_ATTRIBUTE = "RojoRenderFidelity"
 local MESH_PART_SIZE_ATTRIBUTE = "RojoMeshSize"
 local MESH_PART_TAG = "RojoMeshPart"
+local STYLE_RULE_PROPERTIES_ATTRIBUTE = "RojoStyleProperties"
+local STYLE_RULE_TRANSITIONS_ATTRIBUTE = "RojoStyleTransitions"
+local STYLE_RULE_ORDER_ATTRIBUTE = "RojoStyleRuleOrder"
+local STYLE_SHEET_DERIVES_ATTRIBUTE = "RojoStyleDerives"
+local STYLE_LINK_ATTRIBUTE = "RojoStyleSheetRef"
+local STYLE_RULE_TAG = "RojoStyleRule"
+local STYLE_SHEET_TAG = "RojoStyleSheet"
+local STYLE_LINK_TAG = "RojoStyleLink"
 
 local ALWAYS_INCLUDE_PROPERTIES = {
 	MeshPart = {
@@ -50,6 +58,10 @@ local ALWAYS_INCLUDE_PROPERTIES = {
 		TextStrokeColor3 = true,
 		TextStrokeTransparency = true,
 		TextTransparency = true,
+	},
+	StyleRule = {
+		Priority = true,
+		Selector = true,
 	},
 }
 
@@ -116,6 +128,9 @@ local FALLBACK_PROPERTY_GROUPS = {
 	{ className = "RemoteFunction", properties = {} },
 	{ className = "BindableEvent", properties = {} },
 	{ className = "BindableFunction", properties = {} },
+	{ className = "StyleSheet", properties = {} },
+	{ className = "StyleRule", properties = { "Priority", "Selector" } },
+	{ className = "StyleLink", properties = { "Enabled" } },
 	{ className = "BoolValue", properties = { "Value" } },
 	{ className = "IntValue", properties = { "Value" } },
 	{ className = "NumberValue", properties = { "Value" } },
@@ -984,62 +999,595 @@ local function encodeAttributes(instance, warnings)
 	return encodedAttributes
 end
 
-local function augmentSpecialCaseProperties(instance, properties, warnings)
-	if not instance:IsA("MeshPart") then
-		return properties
+local function isArrayTable(value)
+	if type(value) ~= "table" then
+		return false
 	end
 
-	local result = properties or {}
-	local encodedAttributes = result.Attributes
+	local count = 0
+	for key in pairs(value) do
+		if type(key) ~= "number" or key < 1 or key % 1 ~= 0 then
+			return false
+		end
+
+		count += 1
+	end
+
+	for index = 1, count do
+		if value[index] == nil then
+			return false
+		end
+	end
+
+	return true
+end
+
+local function getEnumTypeName(enumItem)
+	local enumType = enumItem.EnumType
+
+	if type(enumType) == "table" and type(enumType.Name) == "string" then
+		return enumType.Name
+	end
+
+	local enumTypeString = tostring(enumType)
+	local parsedName = string.match(enumTypeString, "^Enum%.(.+)$")
+
+	if type(parsedName) == "string" and parsedName ~= "" then
+		return parsedName
+	end
+
+	return enumTypeString
+end
+
+local function encodeStyleValue(value)
+	local kind = typeof(value)
+
+	if kind == "boolean" or kind == "string" then
+		return value
+	end
+
+	if kind == "number" then
+		if not isFiniteNumber(value) then
+			return nil, "contains a non-finite number"
+		end
+
+		return value
+	end
+
+	if kind == "EnumItem" then
+		return {
+			["$type"] = "EnumItem",
+			enumType = getEnumTypeName(value),
+			name = value.Name,
+		}
+	end
+
+	if kind == "Vector2" then
+		return {
+			["$type"] = "Vector2",
+			x = value.X,
+			y = value.Y,
+		}
+	end
+
+	if kind == "Vector3" then
+		return {
+			["$type"] = "Vector3",
+			x = value.X,
+			y = value.Y,
+			z = value.Z,
+		}
+	end
+
+	if kind == "Color3" then
+		return {
+			["$type"] = "Color3",
+			r = value.R,
+			g = value.G,
+			b = value.B,
+		}
+	end
+
+	if kind == "BrickColor" then
+		return {
+			["$type"] = "BrickColor",
+			number = value.Number,
+		}
+	end
+
+	if kind == "UDim" then
+		return {
+			["$type"] = "UDim",
+			scale = value.Scale,
+			offset = value.Offset,
+		}
+	end
+
+	if kind == "UDim2" then
+		return {
+			["$type"] = "UDim2",
+			xScale = value.X.Scale,
+			xOffset = value.X.Offset,
+			yScale = value.Y.Scale,
+			yOffset = value.Y.Offset,
+		}
+	end
+
+	if kind == "CFrame" then
+		local x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22 = value:GetComponents()
+
+		return {
+			["$type"] = "CFrame",
+			x = x,
+			y = y,
+			z = z,
+			orientation = {
+				{ r00, r01, r02 },
+				{ r10, r11, r12 },
+				{ r20, r21, r22 },
+			},
+		}
+	end
+
+	if kind == "Font" then
+		return {
+			["$type"] = "Font",
+			family = value.Family,
+			weight = value.Weight.Name,
+			style = value.Style.Name,
+		}
+	end
+
+	if kind == "NumberRange" then
+		return {
+			["$type"] = "NumberRange",
+			min = value.Min,
+			max = value.Max,
+		}
+	end
+
+	if kind == "ColorSequence" then
+		local keypoints = {}
+		for _, keypoint in ipairs(value.Keypoints) do
+			table.insert(keypoints, {
+				time = keypoint.Time,
+				color = {
+					keypoint.Value.R,
+					keypoint.Value.G,
+					keypoint.Value.B,
+				},
+			})
+		end
+
+		return {
+			["$type"] = "ColorSequence",
+			keypoints = keypoints,
+		}
+	end
+
+	if kind == "NumberSequence" then
+		local keypoints = {}
+		for _, keypoint in ipairs(value.Keypoints) do
+			table.insert(keypoints, {
+				time = keypoint.Time,
+				value = keypoint.Value,
+				envelope = keypoint.Envelope,
+			})
+		end
+
+		return {
+			["$type"] = "NumberSequence",
+			keypoints = keypoints,
+		}
+	end
+
+	if kind == "Rect" then
+		return {
+			["$type"] = "Rect",
+			minX = value.Min.X,
+			minY = value.Min.Y,
+			maxX = value.Max.X,
+			maxY = value.Max.Y,
+		}
+	end
+
+	if kind == "Ray" then
+		return {
+			["$type"] = "Ray",
+			origin = {
+				x = value.Origin.X,
+				y = value.Origin.Y,
+				z = value.Origin.Z,
+			},
+			direction = {
+				x = value.Direction.X,
+				y = value.Direction.Y,
+				z = value.Direction.Z,
+			},
+		}
+	end
+
+	if kind == "PhysicalProperties" then
+		return {
+			["$type"] = "PhysicalProperties",
+			density = value.Density,
+			friction = value.Friction,
+			elasticity = value.Elasticity,
+			frictionWeight = value.FrictionWeight,
+			elasticityWeight = value.ElasticityWeight,
+		}
+	end
+
+	if kind == "Faces" then
+		return {
+			["$type"] = "Faces",
+			right = value.Right,
+			top = value.Top,
+			back = value.Back,
+			left = value.Left,
+			bottom = value.Bottom,
+			front = value.Front,
+		}
+	end
+
+	if kind == "Axes" then
+		return {
+			["$type"] = "Axes",
+			x = value.X,
+			y = value.Y,
+			z = value.Z,
+		}
+	end
+
+	if kind == "table" then
+		if isArrayTable(value) then
+			local items = {}
+			for index, item in ipairs(value) do
+				local encodedItem, encodeError = encodeStyleValue(item)
+				if encodedItem == nil then
+					return nil, ("array item %d %s"):format(index, encodeError)
+				end
+
+				items[index] = encodedItem
+			end
+
+			return {
+				["$type"] = "Array",
+				items = items,
+			}
+		end
+
+		local entries = {}
+		for key, item in pairs(value) do
+			if type(key) ~= "string" then
+				return nil, "contains a non-string map key"
+			end
+
+			local encodedItem, encodeError = encodeStyleValue(item)
+			if encodedItem == nil then
+				return nil, ("map entry %s %s"):format(key, encodeError)
+			end
+
+			entries[key] = encodedItem
+		end
+
+		return {
+			["$type"] = "Map",
+			entries = entries,
+		}
+	end
+
+	return nil, ("unsupported style value type %s"):format(kind)
+end
+
+local function encodeStyleJson(value)
+	local encodedValue, encodeError = encodeStyleValue(value)
+	if encodedValue == nil then
+		return nil, encodeError
+	end
+
+	local ok, encodedJson = pcall(function()
+		return HttpService:JSONEncode(encodedValue)
+	end)
+
+	if not ok then
+		return nil, tostring(encodedJson)
+	end
+
+	return encodedJson
+end
+
+local function appendTag(tags, tagName)
+	if not table.find(tags, tagName) then
+		table.insert(tags, tagName)
+	end
+end
+
+local function getOrCreateEncodedAttributes(properties)
+	local encodedAttributes = properties.Attributes
 
 	if type(encodedAttributes) ~= "table" then
 		encodedAttributes = {}
 	end
 
-	local meshId = instance:GetAttribute(MESH_PART_ATTRIBUTE)
-	if type(meshId) ~= "string" or meshId == "" then
-		meshId = instance.MeshId
-	end
+	return encodedAttributes
+end
 
-	if type(meshId) == "string" and meshId ~= "" then
-		encodedAttributes[MESH_PART_ATTRIBUTE] = {
-			String = meshId,
-		}
-	end
-
-	encodedAttributes[MESH_PART_COLLISION_ATTRIBUTE] = {
-		String = instance.CollisionFidelity.Name,
-	}
-	encodedAttributes[MESH_PART_RENDER_ATTRIBUTE] = {
-		String = instance.RenderFidelity.Name,
-	}
-
-	local encodedSize, sizeError = encodeAttributeValue(instance.Size)
-	if encodedSize ~= nil then
-		encodedAttributes[MESH_PART_SIZE_ATTRIBUTE] = encodedSize
-	elseif sizeError ~= nil then
-		table.insert(warnings, makeWarning(instance:GetFullName(), MESH_PART_SIZE_ATTRIBUTE, sizeError))
-	end
-
-	if next(encodedAttributes) ~= nil then
-		result.Attributes = encodedAttributes
-	end
-
+local function getOrCreateTags(properties)
 	local tags = {}
-	if type(result.Tags) == "table" then
-		for _, tag in ipairs(result.Tags) do
+	if type(properties.Tags) == "table" then
+		for _, tag in ipairs(properties.Tags) do
 			table.insert(tags, tag)
 		end
 	end
 
-	if not table.find(tags, MESH_PART_TAG) then
-		table.insert(tags, MESH_PART_TAG)
+	properties.Tags = tags
+	return tags
+end
+
+local function encodeInstancePath(instance)
+	if typeof(instance) ~= "Instance" then
+		return nil
 	end
 
+	local path = {}
+	local current = instance
+
+	while current ~= nil and current ~= game do
+		table.insert(path, 1, current.Name)
+		current = current.Parent
+	end
+
+	return path
+end
+
+local function collectStyleRuleOrder(instance, warnings)
+	local seenNames = {}
+	local orderedNames = {}
+
+	for _, child in ipairs(instance:GetChildren()) do
+		if child:IsA("StyleRule") then
+			if seenNames[child.Name] then
+				table.insert(warnings, makeWarning(instance:GetFullName(), STYLE_RULE_ORDER_ATTRIBUTE, "contains duplicate StyleRule names and was not exported"))
+				return nil
+			end
+
+			seenNames[child.Name] = true
+			table.insert(orderedNames, child.Name)
+		end
+	end
+
+	if #orderedNames == 0 then
+		return nil
+	end
+
+	return orderedNames
+end
+
+local function augmentStyleRuleProperties(instance, properties, warnings)
+	local result = properties or {}
+	local encodedAttributes = getOrCreateEncodedAttributes(result)
+
+	local propertiesOk, stylePropertiesOrError = pcall(function()
+		return instance:GetProperties()
+	end)
+
+	if propertiesOk and type(stylePropertiesOrError) == "table" and next(stylePropertiesOrError) ~= nil then
+		local encodedJson, encodeError = encodeStyleJson(stylePropertiesOrError)
+		if encodedJson ~= nil then
+			encodedAttributes[STYLE_RULE_PROPERTIES_ATTRIBUTE] = {
+				String = encodedJson,
+			}
+		else
+			table.insert(warnings, makeWarning(instance:GetFullName(), STYLE_RULE_PROPERTIES_ATTRIBUTE, encodeError))
+		end
+	elseif not propertiesOk then
+		table.insert(warnings, makeWarning(instance:GetFullName(), STYLE_RULE_PROPERTIES_ATTRIBUTE, tostring(stylePropertiesOrError)))
+	end
+
+	local transitionsOk, transitionsOrError = pcall(function()
+		return instance:GetPropertyTransitions()
+	end)
+
+	if transitionsOk and type(transitionsOrError) == "table" and next(transitionsOrError) ~= nil then
+		local encodedJson, encodeError = encodeStyleJson(transitionsOrError)
+		if encodedJson ~= nil then
+			encodedAttributes[STYLE_RULE_TRANSITIONS_ATTRIBUTE] = {
+				String = encodedJson,
+			}
+		else
+			table.insert(warnings, makeWarning(instance:GetFullName(), STYLE_RULE_TRANSITIONS_ATTRIBUTE, encodeError))
+		end
+	elseif not transitionsOk then
+		table.insert(warnings, makeWarning(instance:GetFullName(), STYLE_RULE_TRANSITIONS_ATTRIBUTE, tostring(transitionsOrError)))
+	end
+
+	local orderedNames = collectStyleRuleOrder(instance, warnings)
+	if orderedNames ~= nil then
+		local encodedJson, encodeError = encodeStyleJson(orderedNames)
+		if encodedJson ~= nil then
+			encodedAttributes[STYLE_RULE_ORDER_ATTRIBUTE] = {
+				String = encodedJson,
+			}
+		else
+			table.insert(warnings, makeWarning(instance:GetFullName(), STYLE_RULE_ORDER_ATTRIBUTE, encodeError))
+		end
+	end
+
+	if next(encodedAttributes) ~= nil then
+		result.Attributes = encodedAttributes
+	else
+		result.Attributes = nil
+	end
+
+	local tags = getOrCreateTags(result)
+	appendTag(tags, STYLE_RULE_TAG)
 	table.sort(tags)
-	result.Tags = tags
 
 	return result
+end
+
+local function augmentStyleSheetProperties(instance, properties, warnings)
+	local result = properties or {}
+	local encodedAttributes = getOrCreateEncodedAttributes(result)
+
+	local derivesOk, derivesOrError = pcall(function()
+		return instance:GetDerives()
+	end)
+
+	if derivesOk and type(derivesOrError) == "table" and #derivesOrError > 0 then
+		local derives = {}
+		for _, derive in ipairs(derivesOrError) do
+			local instancePath = encodeInstancePath(derive)
+			if instancePath ~= nil then
+				table.insert(derives, instancePath)
+			end
+		end
+
+		if #derives > 0 then
+			local encodedJson, encodeError = encodeStyleJson(derives)
+			if encodedJson ~= nil then
+				encodedAttributes[STYLE_SHEET_DERIVES_ATTRIBUTE] = {
+					String = encodedJson,
+				}
+			else
+				table.insert(warnings, makeWarning(instance:GetFullName(), STYLE_SHEET_DERIVES_ATTRIBUTE, encodeError))
+			end
+		end
+	elseif not derivesOk then
+		table.insert(warnings, makeWarning(instance:GetFullName(), STYLE_SHEET_DERIVES_ATTRIBUTE, tostring(derivesOrError)))
+	end
+
+	local orderedNames = collectStyleRuleOrder(instance, warnings)
+	if orderedNames ~= nil then
+		local encodedJson, encodeError = encodeStyleJson(orderedNames)
+		if encodedJson ~= nil then
+			encodedAttributes[STYLE_RULE_ORDER_ATTRIBUTE] = {
+				String = encodedJson,
+			}
+		else
+			table.insert(warnings, makeWarning(instance:GetFullName(), STYLE_RULE_ORDER_ATTRIBUTE, encodeError))
+		end
+	end
+
+	if next(encodedAttributes) ~= nil then
+		result.Attributes = encodedAttributes
+	else
+		result.Attributes = nil
+	end
+
+	local tags = getOrCreateTags(result)
+	appendTag(tags, STYLE_SHEET_TAG)
+	table.sort(tags)
+
+	return result
+end
+
+local function augmentStyleLinkProperties(instance, properties, warnings)
+	local result = properties or {}
+	local encodedAttributes = getOrCreateEncodedAttributes(result)
+
+	local styleSheetOk, styleSheetOrError = pcall(function()
+		return instance.StyleSheet
+	end)
+
+	if styleSheetOk and typeof(styleSheetOrError) == "Instance" then
+		local instancePath = encodeInstancePath(styleSheetOrError)
+		if instancePath ~= nil then
+			local encodedJson, encodeError = encodeStyleJson(instancePath)
+			if encodedJson ~= nil then
+				encodedAttributes[STYLE_LINK_ATTRIBUTE] = {
+					String = encodedJson,
+				}
+			else
+				table.insert(warnings, makeWarning(instance:GetFullName(), STYLE_LINK_ATTRIBUTE, encodeError))
+			end
+		end
+	elseif not styleSheetOk then
+		table.insert(warnings, makeWarning(instance:GetFullName(), STYLE_LINK_ATTRIBUTE, tostring(styleSheetOrError)))
+	end
+
+	if next(encodedAttributes) ~= nil then
+		result.Attributes = encodedAttributes
+	else
+		result.Attributes = nil
+	end
+
+	local tags = getOrCreateTags(result)
+	appendTag(tags, STYLE_LINK_TAG)
+	table.sort(tags)
+
+	return result
+end
+
+local function augmentSpecialCaseProperties(instance, properties, warnings)
+	if instance:IsA("MeshPart") then
+		local result = properties or {}
+		local encodedAttributes = result.Attributes
+
+		if type(encodedAttributes) ~= "table" then
+			encodedAttributes = {}
+		end
+
+		local meshId = instance:GetAttribute(MESH_PART_ATTRIBUTE)
+		if type(meshId) ~= "string" or meshId == "" then
+			meshId = instance.MeshId
+		end
+
+		if type(meshId) == "string" and meshId ~= "" then
+			encodedAttributes[MESH_PART_ATTRIBUTE] = {
+				String = meshId,
+			}
+		end
+
+		encodedAttributes[MESH_PART_COLLISION_ATTRIBUTE] = {
+			String = instance.CollisionFidelity.Name,
+		}
+		encodedAttributes[MESH_PART_RENDER_ATTRIBUTE] = {
+			String = instance.RenderFidelity.Name,
+		}
+
+		local encodedSize, sizeError = encodeAttributeValue(instance.Size)
+		if encodedSize ~= nil then
+			encodedAttributes[MESH_PART_SIZE_ATTRIBUTE] = encodedSize
+		elseif sizeError ~= nil then
+			table.insert(warnings, makeWarning(instance:GetFullName(), MESH_PART_SIZE_ATTRIBUTE, sizeError))
+		end
+
+		if next(encodedAttributes) ~= nil then
+			result.Attributes = encodedAttributes
+		end
+
+		local tags = {}
+		if type(result.Tags) == "table" then
+			for _, tag in ipairs(result.Tags) do
+				table.insert(tags, tag)
+			end
+		end
+
+		if not table.find(tags, MESH_PART_TAG) then
+			table.insert(tags, MESH_PART_TAG)
+		end
+
+		table.sort(tags)
+		result.Tags = tags
+
+		return result
+	end
+
+	if instance:IsA("StyleRule") then
+		return augmentStyleRuleProperties(instance, properties, warnings)
+	end
+
+	if instance:IsA("StyleSheet") then
+		return augmentStyleSheetProperties(instance, properties, warnings)
+	end
+
+	if instance:IsA("StyleLink") then
+		return augmentStyleLinkProperties(instance, properties, warnings)
+	end
+
+	return properties
 end
 
 local function normalizeLegacyProperties(properties)
@@ -1138,14 +1686,6 @@ local function collectProperties(instance, warnings)
 	return properties
 end
 
-local function childSort(left, right)
-	if left.Name == right.Name then
-		return left.ClassName < right.ClassName
-	end
-
-	return string.lower(left.Name) < string.lower(right.Name)
-end
-
 local function serializeInstance(instance, warnings)
 	local node = {
 		name = instance.Name,
@@ -1172,7 +1712,6 @@ local function serializeInstance(instance, warnings)
 	end
 
 	local children = instance:GetChildren()
-	table.sort(children, childSort)
 
 	for _, child in ipairs(children) do
 		table.insert(node.children, serializeInstance(child, warnings))

@@ -60,4 +60,3 @@ function HttpClient.export(plugin, payload)
 end
 
 return HttpClient
-

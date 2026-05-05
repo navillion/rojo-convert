@@ -59,6 +59,13 @@ class ProjectPlacement:
     preserve_original_name: bool
 
 
+@dataclass(frozen=True)
+class NameAllocation:
+    directory_name: str
+    renamed_for_collision: bool
+    renamed_for_sanitization: bool
+
+
 class ExportWriter:
     def __init__(self, output_root: Path, project_root: Path | None = None) -> None:
         self.output_root = output_root.resolve()
@@ -70,6 +77,9 @@ class ExportWriter:
         selection = payload.get("selection")
         if not isinstance(selection, list) or not selection:
             raise ExportError("Payload must include a non-empty selection array.")
+        preserve_original_duplicate_names = payload.get("preserveOriginalDuplicateNames", True)
+        if not isinstance(preserve_original_duplicate_names, bool):
+            raise ExportError("preserveOriginalDuplicateNames must be a boolean when provided.")
 
         self.output_root.mkdir(parents=True, exist_ok=True)
 
@@ -86,7 +96,12 @@ class ExportWriter:
                 fallback_selection.append(node)
                 continue
 
-            target_directory = self._write_into_existing_project(placement, node, warnings)
+            target_directory = self._write_into_existing_project(
+                placement,
+                node,
+                warnings,
+                preserve_original_duplicate_names=preserve_original_duplicate_names,
+            )
             mapped_paths.append(str(target_directory))
             created_paths.append(str(target_directory))
 
@@ -96,9 +111,15 @@ class ExportWriter:
         fallback_result: dict[str, Any] | None = None
         if fallback_selection:
             if len(fallback_selection) == 1:
-                fallback_result = self._export_single(fallback_selection[0])
+                fallback_result = self._export_single(
+                    fallback_selection[0],
+                    preserve_original_duplicate_names=preserve_original_duplicate_names,
+                )
             else:
-                fallback_result = self._export_multiple(fallback_selection)
+                fallback_result = self._export_multiple(
+                    fallback_selection,
+                    preserve_original_duplicate_names=preserve_original_duplicate_names,
+                )
 
             created_paths.extend(fallback_result["createdPaths"])
             warnings.extend(fallback_result["warnings"])
@@ -127,12 +148,23 @@ class ExportWriter:
             "projectFiles": sorted(project_files),
         }
 
-    def _export_single(self, node: dict[str, Any]) -> dict[str, Any]:
+    def _export_single(
+        self,
+        node: dict[str, Any],
+        *,
+        preserve_original_duplicate_names: bool,
+    ) -> dict[str, Any]:
         warnings: list[str] = []
         root_directory_name = self._choose_available_name(self.output_root, node["name"])
         root_directory = self.output_root / root_directory_name
 
-        self._write_instance_directory(root_directory, node, warnings, preserve_original_name=False)
+        self._write_instance_directory(
+            root_directory,
+            node,
+            warnings,
+            preserve_original_name=False,
+            preserve_original_duplicate_names=preserve_original_duplicate_names,
+        )
 
         project_file = self.output_root / f"{root_directory_name}.project.json"
         project_payload = self._build_project(
@@ -149,7 +181,12 @@ class ExportWriter:
             "warnings": warnings,
         }
 
-    def _export_multiple(self, selection: list[dict[str, Any]]) -> dict[str, Any]:
+    def _export_multiple(
+        self,
+        selection: list[dict[str, Any]],
+        *,
+        preserve_original_duplicate_names: bool,
+    ) -> dict[str, Any]:
         warnings: list[str] = []
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         bundle_name = self._choose_available_name(self.output_root, f"RojoConvert-{timestamp}")
@@ -161,9 +198,22 @@ class ExportWriter:
         created_paths: list[str] = [str(bundle_directory)]
 
         for node in selection:
-            root_directory_name = self._choose_unique_component(node["name"], used_root_names)
-            root_directory = bundle_directory / root_directory_name
-            self._write_instance_directory(root_directory, node, warnings, preserve_original_name=False)
+            root_name = self._choose_unique_component(node["name"], used_root_names)
+            root_directory = bundle_directory / root_name.directory_name
+            self._write_instance_directory(
+                root_directory,
+                node,
+                warnings,
+                preserve_original_name=self._should_preserve_original_name(
+                    root_name,
+                    preserve_original_duplicate_names=preserve_original_duplicate_names,
+                ),
+                metadata_name_override=self._metadata_name_override(
+                    root_name,
+                    preserve_original_duplicate_names=preserve_original_duplicate_names,
+                ),
+                preserve_original_duplicate_names=preserve_original_duplicate_names,
+            )
             selections_for_project.append((node, PurePosixPath(root_directory.name).as_posix()))
             created_paths.append(str(root_directory))
 
@@ -288,6 +338,8 @@ class ExportWriter:
         placement: ProjectPlacement,
         node: dict[str, Any],
         warnings: list[str],
+        *,
+        preserve_original_duplicate_names: bool,
     ) -> Path:
         placement.mapping_root.mkdir(parents=True, exist_ok=True)
         self._ensure_intermediate_ancestors(placement.mapping_root, placement.ancestor_entries, warnings)
@@ -303,6 +355,7 @@ class ExportWriter:
             node,
             warnings,
             preserve_original_name=placement.preserve_original_name,
+            preserve_original_duplicate_names=preserve_original_duplicate_names,
             merge_existing=True,
         )
 
@@ -426,6 +479,8 @@ class ExportWriter:
         warnings: list[str],
         *,
         preserve_original_name: bool,
+        metadata_name_override: str | None = None,
+        preserve_original_duplicate_names: bool,
         merge_existing: bool = False,
     ) -> None:
         self._validate_node(node)
@@ -445,6 +500,8 @@ class ExportWriter:
                 f"Filesystem name for {node['name']} was sanitized to {directory.name}; "
                 "the original Instance.Name was preserved in init.meta.json."
             )
+        elif metadata_name_override is not None:
+            properties["Name"] = metadata_name_override
 
         class_name = node["className"]
         script_file_name = SCRIPT_FILE_NAMES.get(class_name)
@@ -467,17 +524,25 @@ class ExportWriter:
             raise ExportError(f"Expected children for {node['name']} to be an array.")
 
         used_child_names: set[str] = set()
-        for child in sorted(children, key=self._child_sort_key):
+        for child in children:
             if not isinstance(child, dict):
                 raise ExportError(f"Child nodes for {node['name']} must be objects.")
 
-            child_directory_name = self._choose_unique_component(child["name"], used_child_names)
-            child_directory = directory / child_directory_name
+            child_name = self._choose_unique_component(child["name"], used_child_names)
+            child_directory = directory / child_name.directory_name
             self._write_instance_directory(
                 child_directory,
                 child,
                 warnings,
-                preserve_original_name=child_directory_name != child["name"],
+                preserve_original_name=self._should_preserve_original_name(
+                    child_name,
+                    preserve_original_duplicate_names=preserve_original_duplicate_names,
+                ),
+                metadata_name_override=self._metadata_name_override(
+                    child_name,
+                    preserve_original_duplicate_names=preserve_original_duplicate_names,
+                ),
+                preserve_original_duplicate_names=preserve_original_duplicate_names,
                 merge_existing=merge_existing,
             )
 
@@ -488,14 +553,6 @@ class ExportWriter:
     @staticmethod
     def _write_text(path: Path, source: str) -> None:
         path.write_text(source, encoding="utf-8", newline="\n")
-
-    @staticmethod
-    def _child_sort_key(node: dict[str, Any]) -> tuple[str, str, str]:
-        return (
-            node["name"].casefold(),
-            node["className"].casefold(),
-            node["name"],
-        )
 
     @classmethod
     def _choose_available_name(cls, parent: Path, preferred_name: str) -> str:
@@ -510,17 +567,45 @@ class ExportWriter:
         return candidate
 
     @classmethod
-    def _choose_unique_component(cls, preferred_name: str, used_names: set[str]) -> str:
+    def _choose_unique_component(cls, preferred_name: str, used_names: set[str]) -> NameAllocation:
         base = cls._sanitize_component(preferred_name)
         candidate = base
         suffix = 2
+        renamed_for_collision = False
 
         while candidate.casefold() in used_names:
             candidate = f"{base}-{suffix}"
             suffix += 1
+            renamed_for_collision = True
 
         used_names.add(candidate.casefold())
-        return candidate
+        return NameAllocation(
+            directory_name=candidate,
+            renamed_for_collision=renamed_for_collision,
+            renamed_for_sanitization=base != preferred_name,
+        )
+
+    @staticmethod
+    def _should_preserve_original_name(
+        allocation: NameAllocation,
+        *,
+        preserve_original_duplicate_names: bool,
+    ) -> bool:
+        if allocation.renamed_for_sanitization:
+            return True
+        if allocation.renamed_for_collision and preserve_original_duplicate_names:
+            return True
+        return False
+
+    @staticmethod
+    def _metadata_name_override(
+        allocation: NameAllocation,
+        *,
+        preserve_original_duplicate_names: bool,
+    ) -> str | None:
+        if allocation.renamed_for_collision and not preserve_original_duplicate_names:
+            return allocation.directory_name
+        return None
 
     @classmethod
     def _sanitize_component(cls, value: str) -> str:

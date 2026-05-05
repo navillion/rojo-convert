@@ -279,6 +279,163 @@ class ExportWriterTests(unittest.TestCase):
             self.assertEqual(first_meta["properties"]["Name"], "A*")
             self.assertEqual(second_meta["properties"]["Name"], "A?")
 
+    def test_duplicate_child_names_preserve_original_instance_name_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_directory:
+            writer = ExportWriter(Path(temp_directory), project_root=Path(temp_directory))
+            payload = {
+                "selection": [
+                    {
+                        "name": "Root",
+                        "className": "Folder",
+                        "mountPath": [],
+                        "children": [
+                            {
+                                "name": "Part",
+                                "className": "Part",
+                                "mountPath": [],
+                                "children": [],
+                            },
+                            {
+                                "name": "Part",
+                                "className": "Part",
+                                "mountPath": [],
+                                "children": [],
+                            },
+                        ],
+                    }
+                ]
+            }
+
+            result = writer.export(payload)
+            root_directory = Path(result["bundlePath"])
+            child_directories = sorted(path for path in root_directory.iterdir() if path.is_dir())
+
+            self.assertEqual([path.name for path in child_directories], ["Part", "Part-2"])
+
+            first_meta = json.loads((child_directories[0] / "init.meta.json").read_text(encoding="utf-8"))
+            second_meta = json.loads((child_directories[1] / "init.meta.json").read_text(encoding="utf-8"))
+
+            self.assertNotIn("Name", first_meta.get("properties", {}))
+            self.assertEqual(second_meta["properties"]["Name"], "Part")
+
+    def test_duplicate_child_names_can_keep_deduped_filesystem_name_in_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_directory:
+            writer = ExportWriter(Path(temp_directory), project_root=Path(temp_directory))
+            payload = {
+                "preserveOriginalDuplicateNames": False,
+                "selection": [
+                    {
+                        "name": "Root",
+                        "className": "Folder",
+                        "mountPath": [],
+                        "children": [
+                            {
+                                "name": "Part",
+                                "className": "Part",
+                                "mountPath": [],
+                                "children": [],
+                            },
+                            {
+                                "name": "Part",
+                                "className": "Part",
+                                "mountPath": [],
+                                "children": [],
+                            },
+                        ],
+                    }
+                ]
+            }
+
+            result = writer.export(payload)
+            root_directory = Path(result["bundlePath"])
+            child_directories = sorted(path for path in root_directory.iterdir() if path.is_dir())
+
+            self.assertEqual([path.name for path in child_directories], ["Part", "Part-2"])
+
+            second_meta = json.loads((child_directories[1] / "init.meta.json").read_text(encoding="utf-8"))
+            self.assertEqual(second_meta["properties"]["Name"], "Part-2")
+
+    def test_writer_preserves_input_child_order_for_duplicate_name_assignment(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_directory:
+            writer = ExportWriter(Path(temp_directory), project_root=Path(temp_directory))
+            payload = {
+                "selection": [
+                    {
+                        "name": "Root",
+                        "className": "Folder",
+                        "mountPath": [],
+                        "children": [
+                            {
+                                "name": "Dup",
+                                "className": "Part",
+                                "mountPath": [],
+                                "children": [],
+                            },
+                            {
+                                "name": "Dup",
+                                "className": "Tool",
+                                "mountPath": [],
+                                "children": [],
+                            },
+                            {
+                                "name": "Dup",
+                                "className": "Model",
+                                "mountPath": [],
+                                "children": [],
+                            },
+                        ],
+                    }
+                ]
+            }
+
+            result = writer.export(payload)
+            root_directory = Path(result["bundlePath"])
+            first_meta = json.loads((root_directory / "Dup" / "init.meta.json").read_text(encoding="utf-8"))
+            second_meta = json.loads((root_directory / "Dup-2" / "init.meta.json").read_text(encoding="utf-8"))
+            third_meta = json.loads((root_directory / "Dup-3" / "init.meta.json").read_text(encoding="utf-8"))
+
+            self.assertEqual(first_meta["className"], "Part")
+            self.assertEqual(second_meta["className"], "Tool")
+            self.assertEqual(third_meta["className"], "Model")
+
+    def test_sanitized_duplicate_names_still_preserve_original_name_when_duplicate_mode_is_disabled(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_directory:
+            writer = ExportWriter(Path(temp_directory), project_root=Path(temp_directory))
+            payload = {
+                "preserveOriginalDuplicateNames": False,
+                "selection": [
+                    {
+                        "name": "Bad:Folder",
+                        "className": "Folder",
+                        "mountPath": [],
+                        "children": [
+                            {
+                                "name": "A*",
+                                "className": "Tool",
+                                "mountPath": [],
+                                "children": [],
+                            },
+                            {
+                                "name": "A?",
+                                "className": "Tool",
+                                "mountPath": [],
+                                "children": [],
+                            },
+                        ],
+                    }
+                ]
+            }
+
+            result = writer.export(payload)
+            root_directory = Path(result["bundlePath"])
+            child_directories = sorted(path for path in root_directory.iterdir() if path.is_dir())
+
+            first_meta = json.loads((child_directories[0] / "init.meta.json").read_text(encoding="utf-8"))
+            second_meta = json.loads((child_directories[1] / "init.meta.json").read_text(encoding="utf-8"))
+
+            self.assertEqual(first_meta["properties"]["Name"], "A*")
+            self.assertEqual(second_meta["properties"]["Name"], "A?")
+
     def test_multiple_selection_export_creates_bundle_project(self) -> None:
         with tempfile.TemporaryDirectory() as temp_directory:
             writer = ExportWriter(Path(temp_directory), project_root=Path(temp_directory))
